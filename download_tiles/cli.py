@@ -102,6 +102,11 @@ def validate_tiles_url(ctx, param, value):
     help="User-Agent header to send with tile requests",
 )
 @click.option(
+    "--referer",
+    default="",
+    help="Referer header to send with tile requests, blocks --user-agent",
+)
+@click.option(
     "--attribution",
     help="Attribution to write to the metadata table",
 )
@@ -126,6 +131,7 @@ def cli(
     name,
     verbose,
     cache_dir,
+    referer,
 ):
     """
     Download map tiles and store them in an MBTiles database.
@@ -148,9 +154,13 @@ def cli(
         attribution = DEFAULT_ATTRIBUTION
     if verbose:
         logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+    if referer != "":
+        headers={"Referer": referer}
+    else:
+        headers={"User-Agent": user_agent}
     kwargs = dict(
         tiles_url=tiles_url or DEFAULT_TILES_URL,
-        tiles_headers={"User-Agent": user_agent},
+        tiles_headers=headers,
         tiles_subdomains=tiles_subdomains,
         filepath=str(mbtiles),
     )

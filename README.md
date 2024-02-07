@@ -9,10 +9,51 @@ Download map tiles and store them in an MBTiles database
 
 ## Installation
 
-Install this tool using `pip`:
+Unlike the root repository, you cannot install this fork from `pip`. Download this repo, unzip, go to its directory in the terminal / command prompt and run:
 ```bash
-pip install download-tiles
+python setup.py install
 ```
+
+Requires Python 3 and `pip`.
+
+To uninstall:
+
+```bash
+pip uninstall download-tiles
+```
+
+## Usage for Mapy.cz
+
+Include the `--referer="https://mapy.cz/"` option. Then, you can download from Mapy.cz with the following URLs:
+```bash
+--tiles-url=https://mapserver.mapy.cz/base-m/{z}-{x}-{y}        //základní
+--tiles-url=https://mapserver.mapy.cz/base-en/{z}-{x}-{y}       //base (en)
+--tiles-url=https://mapserver.mapy.cz/turist-m/{z}-{x}-{y}      //turistická
+--tiles-url=https://mapserver.mapy.cz/winter-m-down/{z}-{x}-{y} //zimní
+--tiles-url=https://mapserver.mapy.cz/zemepis-m/{z}-{x}-{y}     //zeměpisná
+--tiles-url=https://mapserver.mapy.cz/bing/{z}-{x}-{y}          //letecká (jpeg, untested)
+--tiles-url=https://mapserver.mapy.cz/hybrid-base-m/{z}-{x}-{y} //průhledná základní přes leteckou
+etc.
+```
+
+See below how to select output file, zoom levels, bounding box etc.
+
+**Example:**
+
+```bash
+download-tiles --referer="https://mapy.cz/" --tiles-url=https://mapserver.mapy.cz/base-m/{z}-{x}-{y} --zoom-levels=8-10 --country=czechia --cache-dir=tmp "Česko základní.mbtiles"
+download-tiles --referer="https://mapy.cz/" --tiles-url=https://mapserver.mapy.cz/turist-m/{z}-{x}-{y} --zoom-levels=14 --bbox=15.02,50.44,15.34,50.66 --cache-dir=tmp "Český ráj turistická.mbtiles"
+```
+
+The `--cache-dir` parameter is recommended: if the command fails (it sometimes does because of "database locked" issues I couldn't fix), you can retry it and it will finish without re-downloading already saved tiles.
+
+To convert the result to a big PNG, open the Python shell (command `python` in terminal) and write the following (example for zoom-10 Czech Republic from "Česko základní.mbtiles"):
+```python
+from landez import ImageExporter
+ie = ImageExporter(mbtiles_file="Česko základní.mbtiles")
+ie.export_image(bbox=(12.09,48.55,18.87,51.06), zoomlevel=10, imagepath="Česko základní 10.png")
+```
+
 ## Usage
 
 This tool downloads tiles from a specified [TMS (Tile Map Server)](https://wiki.openstreetmap.org/wiki/TMS) server for a specified bounding box and range of zoom levels and stores those tiles in a MBTiles SQLite database. It is a command-line wrapper around the [Landez](https://github.com/makinacorpus/landez) Python libary.
