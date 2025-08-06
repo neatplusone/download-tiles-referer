@@ -237,6 +237,13 @@ def cli(
                 db = sqlite3.connect(str(mbtiles), timeout=30.0)
                 db.execute("PRAGMA journal_mode=WAL")
                 with db:
+                    # Ensure metadata table exists
+                    db.execute("""
+                        CREATE TABLE IF NOT EXISTS metadata (
+                            name text primary key,
+                            value text
+                        )
+                    """)
                     if attribution:
                         db.execute(
                             "insert or replace into metadata (name, value) values (:name, :value)",
