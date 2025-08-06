@@ -193,10 +193,9 @@ def cli(
     )
     try:
         mb.run()
-    except DownloadError as e:
+    except Exception as e:
         if not skip_on_failure:
             raise
-        # If skip_on_failure is True, log the error but continue
         if verbose:
             click.echo(f"Warning: {e}", err=True)
         # Ensure database exists even if all tiles failed
