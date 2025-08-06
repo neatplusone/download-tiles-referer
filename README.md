@@ -9,12 +9,22 @@ Download map tiles and store them in an MBTiles database
 
 ## Installation
 
-Unlike the root repository, you cannot install this fork from `pip`. Download this repo, unzip, go to its directory in the terminal / command prompt and run:
+Unlike the root repository, you cannot install this fork from `pip`. Download this repo, unzip, go to its directory in the terminal / command prompt and install using pip:
+
 ```bash
-python setup.py install
+# Install directly with pip (recommended)
+pip install .
+
+# Or, for development with editable install
+pip install -e .
+
+# Or, to build a wheel first using standards-based tools
+pip install build
+python -m build
+pip install dist/download_tiles-*.whl
 ```
 
-Requires Python 3 and `pip`.
+Requires Python 3.8+ and `pip`.
 
 To uninstall:
 
@@ -142,18 +152,31 @@ When downloading many tiles (especially at zoom levels 10+), you may encounter S
 To contribute to this tool, first checkout the code. Then create a new virtual environment:
 ```bash
 cd download-tiles
-python -mvenv venv
-source venv/bin/activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 Or if you are using `pipenv`:
 ```bash
 pipenv shell
 ```
-Now install the dependencies and tests:
+Now install the package in development mode with test dependencies:
 ```bash
+# Install in editable mode with test dependencies
 pip install -e '.[test]'
 ```
 To run the tests:
 ```bash
 pytest
+```
+
+To build the package for distribution:
+```bash
+# Install build tools
+pip install build twine
+
+# Build the package
+python -m build
+
+# This creates wheel and source distributions in dist/
+ls dist/
 ```
