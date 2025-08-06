@@ -26,10 +26,26 @@ pip install dist/download_tiles-*.whl
 
 Requires Python 3.8+ and `pip`.
 
+### Installation Troubleshooting
+
+If you encounter permission errors during installation:
+
+```bash
+# Clean up any existing egg-info directories
+rm -rf *.egg-info download_tiles.egg-info build dist
+
+# Then try installing again
+pipx install .
+```
+
+If you see "Cannot update time stamp of directory" errors, it's likely due to permission issues with existing build artifacts. Clean them up as shown above.
+
 To uninstall:
 
 ```bash
 pip uninstall download-tiles
+# or if installed with pipx:
+pipx uninstall download-tiles
 ```
 
 ## Usage for Mapy.cz
