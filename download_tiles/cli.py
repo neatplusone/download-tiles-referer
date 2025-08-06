@@ -8,6 +8,8 @@ import sys
 import time
 import urllib
 
+from . import __version__
+
 APPLICATION_ID = 0x4D504258
 DEFAULT_TILES_URL = "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 DEFAULT_ATTRIBUTION = "© OpenStreetMap contributors"
@@ -128,7 +130,7 @@ def validate_tiles_url(ctx, param, value):
     default=10,
     help="Number of download threads (default: 10, lower values reduce database lock issues)",
 )
-@click.version_option()
+@click.version_option(version=__version__)
 def cli(
     mbtiles,
     zoom_levels,

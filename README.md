@@ -126,6 +126,17 @@ Number of download threads to use (default: 10). Lower values can help prevent S
 
 Databases created with this tool will have their SQLite `application_id` set to `0x4d504258`, as described in the SQLite [magic.txt file](https://www.sqlite.org/src/artifact?ci=trunk&filename=magic.txt).
 
+## Known Issues
+
+### pkg_resources deprecation warning
+You may see a warning about `pkg_resources` being deprecated. This warning comes from the landez library (v2.5.0) which is a dependency of this tool. The warning is harmless and doesn't affect functionality. This tool itself has been updated to use modern setuptools configuration (pyproject.toml).
+
+### Database locking with high zoom levels
+When downloading many tiles (especially at zoom levels 10+), you may encounter SQLite "database is locked" errors. To mitigate this:
+- Use `--thread-count=5` or lower to reduce concurrent writes
+- Use `--skip-on-failure` to continue despite errors
+- Use `--cache-dir` to enable retrying failed downloads
+
 ## Development
 
 To contribute to this tool, first checkout the code. Then create a new virtual environment:
