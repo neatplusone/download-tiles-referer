@@ -1,5 +1,6 @@
 import click
 import landez
+from landez.sources import DownloadError
 import logging
 import re
 import requests
@@ -189,7 +190,14 @@ def cli(
     mb.add_coverage(
         bbox=bbox, zoomlevels=list(range(zoom_levels[0], zoom_levels[1] + 1))
     )
-    mb.run()
+    try:
+        mb.run()
+    except DownloadError as e:
+        if not skip_on_failure:
+            raise
+        # If skip_on_failure is True, log the error but continue
+        if verbose:
+            click.echo(f"Warning: {e}", err=True)
 
     # Wait a bit to ensure landez has finished writing
     time.sleep(0.5)
