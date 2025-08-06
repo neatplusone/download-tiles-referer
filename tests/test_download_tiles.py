@@ -135,3 +135,43 @@ def test_city_and_country(
         metadata = dict(db.execute("select name, value from metadata").fetchall())
         assert metadata["bounds"] == expected_bbox
         assert metadata["name"] == display_name
+
+
+def test_skip_on_failure(requests_mock):
+    # Mock successful tile
+    requests_mock.get(
+        "http://a.tile.openstreetmap.org/0/0/0.png",
+        content=b"PNG tile",
+    )
+    # Mock failed tile (404)
+    requests_mock.get(
+        "http://b.tile.openstreetmap.org/1/0/0.png",
+        status_code=404,
+    )
+    requests_mock.get(
+        "http://a.tile.openstreetmap.org/1/0/1.png",
+        content=b"PNG tile 2",
+    )
+    requests_mock.get(
+        "http://b.tile.openstreetmap.org/1/1/0.png",
+        content=b"PNG tile 3",
+    )
+    requests_mock.get(
+        "http://a.tile.openstreetmap.org/1/1/1.png",
+        content=b"PNG tile 4",
+    )
+    
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Test with --skip-on-failure flag
+        result = runner.invoke(cli, ["tiles.db", "-z", "0-1", "--skip-on-failure"])
+        assert result.exit_code == 0
+        db = sqlite3.connect("tiles.db")
+        # Should have 4 tiles instead of 5 (one failed)
+        rows = db.execute("select count(*) from tiles").fetchone()
+        assert rows[0] == 4
+        
+        # Test without --skip-on-failure flag (should fail)
+        result2 = runner.invoke(cli, ["tiles2.db", "-z", "0-1"])
+        # The command should fail due to 404 error
+        assert result2.exit_code != 0

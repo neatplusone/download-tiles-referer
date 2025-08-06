@@ -116,6 +116,11 @@ def validate_tiles_url(ctx, param, value):
 )
 @click.option("--verbose", is_flag=True, help="Verbose mode - show detailed logs")
 @click.option("--cache-dir", help="Folder to cache tiles between runs")
+@click.option(
+    "--skip-on-failure",
+    is_flag=True,
+    help="Continue downloading other tiles if some tiles fail (e.g., 404 errors)",
+)
 @click.version_option()
 def cli(
     mbtiles,
@@ -132,6 +137,7 @@ def cli(
     verbose,
     cache_dir,
     referer,
+    skip_on_failure,
 ):
     """
     Download map tiles and store them in an MBTiles database.
@@ -163,6 +169,7 @@ def cli(
         tiles_headers=headers,
         tiles_subdomains=tiles_subdomains,
         filepath=str(mbtiles),
+        errors_as_warnings=skip_on_failure,
     )
     if cache_dir:
         kwargs["cache"] = True
