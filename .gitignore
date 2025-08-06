@@ -2,8 +2,29 @@
 __pycache__/
 *.py[cod]
 *$py.class
-venv
+venv/
 .eggs
 .pytest_cache
-*.egg-info
+*.egg-info/
+download_tiles.egg-info/
 .DS_Store
+# Build directories
+dist/
+build/
+# Test and coverage
+.coverage
+.tox
+# MBTiles files
+*.mbtiles
+# Temporary files
+*.swp
+*.swo
+*~
+tmp/
+cache/
+# IDE files
+.vscode/
+.idea/
+# Error logs
+errs.txt
+err2.txt

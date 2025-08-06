@@ -9,17 +9,44 @@ Download map tiles and store them in an MBTiles database
 
 ## Installation
 
-Unlike the root repository, you cannot install this fork from `pip`. Download this repo, unzip, go to its directory in the terminal / command prompt and run:
+Unlike the root repository, you cannot install this fork from `pip`. Download this repo, unzip, go to its directory in the terminal / command prompt and install using pip:
+
 ```bash
-python setup.py install
+# Install directly with pipx (recommended) or pip
+pipx install .
+pipx inject download-tiles setuptools
+
+# Or, for development with editable install
+pip install -e .
+
+# Or, to build a wheel first using standards-based tools
+pip install build
+python -m build
+pip install dist/download_tiles-*.whl
 ```
 
-Requires Python 3 and `pip`.
+Requires Python 3.8+ and `pip`.
+
+### Installation Troubleshooting
+
+If you encounter permission errors during installation:
+
+```bash
+# Clean up any existing egg-info directories
+rm -rf *.egg-info download_tiles.egg-info build dist
+
+# Then try installing again
+pipx install .
+```
+
+If you see "Cannot update time stamp of directory" errors, it's likely due to permission issues with existing build artifacts. Clean them up as shown above.
 
 To uninstall:
 
 ```bash
 pip uninstall download-tiles
+# or if installed with pipx:
+pipx uninstall download-tiles
 ```
 
 ## Usage for Mapy.cz
@@ -126,23 +153,50 @@ Number of download threads to use (default: 10). Lower values can help prevent S
 
 Databases created with this tool will have their SQLite `application_id` set to `0x4d504258`, as described in the SQLite [magic.txt file](https://www.sqlite.org/src/artifact?ci=trunk&filename=magic.txt).
 
+## Known Issues
+
+### pkg_resources deprecation warning (FIXED)
+The landez library (v2.5.0) uses the deprecated `pkg_resources.parse_version`. This has been addressed in this fork by:
+- Suppressing the deprecation warning
+- Monkey-patching to use the modern `packaging.version.parse` instead
+- The warning should no longer appear when running the tool
+
+### Database locking with high zoom levels
+When downloading many tiles (especially at zoom levels 10+), you may encounter SQLite "database is locked" errors. To mitigate this:
+- Use `--thread-count=5` or lower to reduce concurrent writes
+- Use `--skip-on-failure` to continue despite errors
+- Use `--cache-dir` to enable retrying failed downloads
+
 ## Development
 
 To contribute to this tool, first checkout the code. Then create a new virtual environment:
 ```bash
 cd download-tiles
-python -mvenv venv
-source venv/bin/activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 Or if you are using `pipenv`:
 ```bash
 pipenv shell
 ```
-Now install the dependencies and tests:
+Now install the package in development mode with test dependencies:
 ```bash
+# Install in editable mode with test dependencies
 pip install -e '.[test]'
 ```
 To run the tests:
 ```bash
 pytest
+```
+
+To build the package for distribution:
+```bash
+# Install build tools
+pip install build twine
+
+# Build the package
+python -m build
+
+# This creates wheel and source distributions in dist/
+ls dist/
 ```
