@@ -67,6 +67,9 @@ See below how to select output file, zoom levels, bounding box etc.
 
 **Example:**
 
+Lithuania bbox  
+`--bbox=20.6557167,53.8967893,26.8355198,56.4504213`
+
 ```bash
 download-tiles --referer="https://mapy.cz/" --tiles-url=https://mapserver.mapy.cz/base-m/{z}-{x}-{y} --zoom-levels=8-10 --country=czechia --cache-dir=tmp "Česko základní.mbtiles"
 download-tiles --referer="https://mapy.cz/" --tiles-url=https://mapserver.mapy.cz/turist-m/{z}-{x}-{y} --zoom-levels=14 --bbox=15.02,50.44,15.34,50.66 --cache-dir=tmp "Český ráj turistická.mbtiles"
