@@ -5,6 +5,7 @@ import re
 import requests
 import sqlite3
 import sys
+import time
 import urllib
 
 APPLICATION_ID = 0x4D504258
@@ -121,6 +122,12 @@ def validate_tiles_url(ctx, param, value):
     is_flag=True,
     help="Continue downloading other tiles if some tiles fail (e.g., 404 errors)",
 )
+@click.option(
+    "--thread-count",
+    type=int,
+    default=10,
+    help="Number of download threads (default: 10, lower values reduce database lock issues)",
+)
 @click.version_option()
 def cli(
     mbtiles,
@@ -138,6 +145,7 @@ def cli(
     cache_dir,
     referer,
     skip_on_failure,
+    thread_count,
 ):
     """
     Download map tiles and store them in an MBTiles database.
@@ -170,6 +178,7 @@ def cli(
         tiles_subdomains=tiles_subdomains,
         filepath=str(mbtiles),
         errors_as_warnings=skip_on_failure,
+        thread_number=thread_count,
     )
     if cache_dir:
         kwargs["cache"] = True
@@ -182,12 +191,31 @@ def cli(
     )
     mb.run()
 
-    # Set application_id
-    db = sqlite3.connect(str(mbtiles))
-    with db:
-        application_id = db.execute("pragma application_id").fetchone()[0]
-        if not application_id:
-            db.execute("pragma application_id = {}".format(APPLICATION_ID))
+    # Wait a bit to ensure landez has finished writing
+    time.sleep(0.5)
+
+    # Set application_id with retry logic and longer timeout
+    max_retries = 5
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            db = sqlite3.connect(str(mbtiles), timeout=30.0)
+            db.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
+            with db:
+                application_id = db.execute("pragma application_id").fetchone()[0]
+                if not application_id:
+                    db.execute("pragma application_id = {}".format(APPLICATION_ID))
+            db.close()
+            break
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                if verbose:
+                    click.echo(f"Database locked, retrying in {retry_delay} seconds...", err=True)
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                raise
 
     if name is None:
         name = suggested_name
@@ -195,18 +223,32 @@ def cli(
     if attribution or name:
         if attribution == "osm":
             attribution = DEFAULT_ATTRIBUTION
-        db = sqlite3.connect(str(mbtiles))
-        with db:
-            if attribution:
-                db.execute(
-                    "insert into metadata (name, value) values (:name, :value)",
-                    {"name": "attribution", "value": attribution},
-                )
-            if name:
-                db.execute(
-                    "update metadata set value = :value where name = :name",
-                    {"name": "name", "value": name},
-                )
+        
+        for attempt in range(max_retries):
+            try:
+                db = sqlite3.connect(str(mbtiles), timeout=30.0)
+                db.execute("PRAGMA journal_mode=WAL")
+                with db:
+                    if attribution:
+                        db.execute(
+                            "insert or replace into metadata (name, value) values (:name, :value)",
+                            {"name": "attribution", "value": attribution},
+                        )
+                    if name:
+                        db.execute(
+                            "insert or replace into metadata (name, value) values (:name, :value)",
+                            {"name": "name", "value": name},
+                        )
+                db.close()
+                break
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    if verbose:
+                        click.echo(f"Database locked, retrying in {retry_delay} seconds...", err=True)
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    raise
 
 
 def lookup_bbox(parameter, value):

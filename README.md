@@ -119,6 +119,10 @@ Provide a directory to cache downloaded tiles between runs. This can be useful i
 --skip-on-failure
 ```
 Continue downloading other tiles if some tiles fail (e.g., 404 errors). When this flag is set, the tool will skip missing or unavailable tiles instead of stopping the entire download process. This is useful when working with tile servers that may have incomplete coverage or temporary availability issues.
+```
+--thread-count=10
+```
+Number of download threads to use (default: 10). Lower values can help prevent SQLite database locking issues when downloading many tiles, especially at higher zoom levels. If you encounter "database is locked" errors, try reducing this value (e.g., `--thread-count=5`).
 
 Databases created with this tool will have their SQLite `application_id` set to `0x4d504258`, as described in the SQLite [magic.txt file](https://www.sqlite.org/src/artifact?ci=trunk&filename=magic.txt).
 
