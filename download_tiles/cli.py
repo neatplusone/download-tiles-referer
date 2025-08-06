@@ -2,6 +2,7 @@ import click
 import landez
 from landez.sources import DownloadError
 import logging
+from pathlib import Path
 import re
 import requests
 import sqlite3
@@ -198,6 +199,25 @@ def cli(
         # If skip_on_failure is True, log the error but continue
         if verbose:
             click.echo(f"Warning: {e}", err=True)
+        # Ensure database exists even if all tiles failed
+        if not Path(mbtiles).exists():
+            db = sqlite3.connect(str(mbtiles))
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS tiles (
+                    zoom_level integer,
+                    tile_column integer,
+                    tile_row integer,
+                    tile_data blob,
+                    primary key (zoom_level, tile_column, tile_row)
+                )
+            """)
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS metadata (
+                    name text primary key,
+                    value text
+                )
+            """)
+            db.close()
 
     # Wait a bit to ensure landez has finished writing
     time.sleep(0.5)
