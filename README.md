@@ -12,8 +12,8 @@ Download map tiles and store them in an MBTiles database
 Unlike the root repository, you cannot install this fork from `pip`. Download this repo, unzip, go to its directory in the terminal / command prompt and install using pip:
 
 ```bash
-# Install directly with pip (recommended)
-pip install .
+# Install directly with pipx (recommended) or pip
+pipx install .
 
 # Or, for development with editable install
 pip install -e .
@@ -138,8 +138,11 @@ Databases created with this tool will have their SQLite `application_id` set to 
 
 ## Known Issues
 
-### pkg_resources deprecation warning
-You may see a warning about `pkg_resources` being deprecated. This warning comes from the landez library (v2.5.0) which is a dependency of this tool. The warning is harmless and doesn't affect functionality. This tool itself has been updated to use modern setuptools configuration (pyproject.toml).
+### pkg_resources deprecation warning (FIXED)
+The landez library (v2.5.0) uses the deprecated `pkg_resources.parse_version`. This has been addressed in this fork by:
+- Suppressing the deprecation warning
+- Monkey-patching to use the modern `packaging.version.parse` instead
+- The warning should no longer appear when running the tool
 
 ### Database locking with high zoom levels
 When downloading many tiles (especially at zoom levels 10+), you may encounter SQLite "database is locked" errors. To mitigate this:

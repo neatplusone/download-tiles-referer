@@ -1,12 +1,27 @@
+import sys
+import warnings
+
+# Suppress the pkg_resources deprecation warning from landez
+# and monkey patch before importing landez
+warnings.filterwarnings("ignore", category=UserWarning, module="landez.sources")
+
+# Pre-emptively monkey patch pkg_resources if it exists
+try:
+    import pkg_resources
+    from packaging import version
+    # Replace the deprecated parse_version with packaging's version.parse
+    pkg_resources.parse_version = version.parse
+except ImportError:
+    pass  # Either pkg_resources or packaging not available
+
 import click
-import landez
 import logging
 import re
 import requests
 import sqlite3
-import sys
 import time
 import urllib
+import landez
 
 from . import __version__
 

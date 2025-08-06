@@ -23,6 +23,7 @@ dependencies = [
     "click",
     "requests",
     "landez==2.5.0",
+    "packaging",  # Used to replace deprecated pkg_resources.parse_version
 ]
 
 [project.optional-dependencies]
