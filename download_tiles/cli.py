@@ -1,6 +1,4 @@
 import click
-import landez
-from landez.sources import DownloadError
 import logging
 from pathlib import Path
 import re
@@ -9,6 +7,8 @@ import sqlite3
 import sys
 import time
 import urllib
+from concurrent.futures import ThreadPoolExecutor
+from math import floor, log, tan, pi, cos
 
 APPLICATION_ID = 0x4D504258
 DEFAULT_TILES_URL = "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -55,6 +55,15 @@ def validate_tiles_url(ctx, param, value):
                 "tiles-url should include {}".format(", ".join(fragments))
             )
     return value
+
+
+def deg2num(lat_deg, lon_deg, zoom):
+    lat_deg = max(min(85.0511, lat_deg), -85.0511)
+    lat_rad = lat_deg * pi / 180
+    n = 2.0**zoom
+    xtile = int((lon_deg + 180.0) / 360.0 * n)
+    ytile = int((1.0 - log(tan(lat_rad) + (1 / cos(lat_rad))) / pi) / 2.0 * n)
+    return (xtile, ytile)
 
 
 @click.command()
@@ -130,6 +139,11 @@ def validate_tiles_url(ctx, param, value):
     default=10,
     help="Number of download threads (default: 10, lower values reduce database lock issues)",
 )
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Overwrite existing mbtiles file if it already exists.",
+)
 @click.version_option()
 def cli(
     mbtiles,
@@ -148,6 +162,7 @@ def cli(
     referer,
     skip_on_failure,
     thread_count,
+    overwrite,
 ):
     """
     Download map tiles and store them in an MBTiles database.
@@ -158,6 +173,8 @@ def cli(
     # mbtiles is required unless show_bbox is used
     if not mbtiles and not show_bbox:
         raise click.BadParameter("mbtiles argument is required")
+    if overwrite and mbtiles and Path(mbtiles).exists():
+        Path(mbtiles).unlink()
     suggested_name = None
     if country:
         bbox, suggested_name = lookup_bbox("country", country)
@@ -171,60 +188,44 @@ def cli(
     if verbose:
         logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     if referer != "":
-        headers={"Referer": referer}
+        headers = {"Referer": referer}
     else:
-        headers={"User-Agent": user_agent}
-    kwargs = dict(
-        tiles_url=tiles_url or DEFAULT_TILES_URL,
-        tiles_headers=headers,
-        tiles_subdomains=tiles_subdomains,
-        filepath=str(mbtiles),
-        errors_as_warnings=skip_on_failure,
-        thread_number=thread_count,
-    )
-    if cache_dir:
-        kwargs["cache"] = True
-        kwargs["tiles_dir"] = cache_dir
-    else:
-        kwargs["cache"] = False
-    mb = landez.MBTilesBuilder(**kwargs)
-    mb.add_coverage(
-        bbox=bbox, zoomlevels=list(range(zoom_levels[0], zoom_levels[1] + 1))
-    )
-    try:
-        mb.run()
-    except Exception as e:
-        if not skip_on_failure:
-            raise
-        if verbose:
-            click.echo(f"Warning: {e}", err=True)
-        # Ensure database exists even if all tiles failed
-        if not Path(mbtiles).exists():
-            db = sqlite3.connect(str(mbtiles))
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS tiles (
-                    zoom_level integer,
-                    tile_column integer,
-                    tile_row integer,
-                    tile_data blob,
-                    primary key (zoom_level, tile_column, tile_row)
-                )
-            """)
-            db.execute("""
-                CREATE TABLE IF NOT EXISTS metadata (
-                    name text primary key,
-                    value text
-                )
-            """)
-            db.close()
+        headers = {"User-Agent": user_agent}
 
-    # Wait a bit to ensure landez has finished writing
-    time.sleep(0.5)
+    db = sqlite3.connect(str(mbtiles))
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob, primary key (zoom_level, tile_column, tile_row))"
+    )
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS metadata (name text primary key, value text)"
+    )
+    db.close()
+
+    min_lon, min_lat, max_lon, max_lat = bbox
+
+    for zoom in range(zoom_levels[0], zoom_levels[1] + 1):
+        top_left = deg2num(max_lat, min_lon, zoom)
+        bottom_right = deg2num(min_lat, max_lon, zoom)
+
+        x_min, y_min = top_left
+        x_max, y_max = bottom_right
+
+        tiles = []
+        for x in range(x_min, x_max + 1):
+            for y in range(y_min, y_max + 1):
+                tiles.append((zoom, x, y))
+
+        with ThreadPoolExecutor(max_workers=thread_count) as executor:
+            for _ in executor.map(
+                lambda p: download_tile(p, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_failure, verbose, cache_dir),
+                tiles,
+            ):
+                pass
 
     # Set application_id with retry logic and longer timeout
     max_retries = 5
     retry_delay = 1.0
-    
+
     for attempt in range(max_retries):
         try:
             db = sqlite3.connect(str(mbtiles), timeout=30.0)
@@ -247,22 +248,19 @@ def cli(
     if name is None:
         name = suggested_name
 
-    if attribution or name:
+    if attribution or name or bbox:
         if attribution == "osm":
             attribution = DEFAULT_ATTRIBUTION
-        
+
         for attempt in range(max_retries):
             try:
                 db = sqlite3.connect(str(mbtiles), timeout=30.0)
                 db.execute("PRAGMA journal_mode=WAL")
                 with db:
                     # Ensure metadata table exists
-                    db.execute("""
-                        CREATE TABLE IF NOT EXISTS metadata (
-                            name text primary key,
-                            value text
-                        )
-                    """)
+                    db.execute(
+                        "CREATE TABLE IF NOT EXISTS metadata (name text primary key, value text)"
+                    )
                     if attribution:
                         db.execute(
                             "insert or replace into metadata (name, value) values (:name, :value)",
@@ -272,6 +270,11 @@ def cli(
                         db.execute(
                             "insert or replace into metadata (name, value) values (:name, :value)",
                             {"name": "name", "value": name},
+                        )
+                    if bbox:
+                        db.execute(
+                            "insert or replace into metadata (name, value) values (:name, :value)",
+                            {"name": "bounds", "value": ",".join(map(str, bbox))},
                         )
                 db.close()
                 break
@@ -283,6 +286,46 @@ def cli(
                     retry_delay *= 2
                 else:
                     raise
+
+def download_tile(tile, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_failure, verbose, cache_dir):
+    zoom, x, y = tile
+    url = (tiles_url or DEFAULT_TILES_URL).format(
+        s=tiles_subdomains[0], z=zoom, x=x, y=y
+    )
+    if cache_dir:
+        cache_path = Path(cache_dir) / f"{zoom}-{x}-{y}.png"
+        if cache_path.exists():
+            with open(cache_path, "rb") as f:
+                tile_data = f.read()
+            db = sqlite3.connect(str(mbtiles))
+            db.execute(
+                "INSERT OR IGNORE INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?, ?, ?, ?)",
+                (zoom, x, y, tile_data),
+            )
+            db.commit()
+            db.close()
+            return
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        tile_data = response.content
+        if cache_dir:
+            with open(cache_path, "wb") as f:
+                f.write(tile_data)
+        db = sqlite3.connect(str(mbtiles))
+        db.execute(
+            "INSERT OR IGNORE INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?, ?, ?, ?)",
+            (zoom, x, y, tile_data),
+        )
+        db.commit()
+        db.close()
+    except requests.exceptions.RequestException as e:
+        if skip_on_failure:
+            if verbose:
+                click.echo(f"Warning: Failed to download tile {zoom}/{x}/{y}: {e}", err=True)
+        else:
+            raise
 
 
 def lookup_bbox(parameter, value):
