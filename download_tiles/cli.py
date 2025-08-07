@@ -128,6 +128,17 @@ def validate_tiles_url(ctx, param, value):
     default=10,
     help="Number of download threads (default: 10, lower values reduce database lock issues)",
 )
+@click.option(
+    "--log-failed-urls-to",
+    type=click.Path(dir_okay=False, file_okay=True),
+    help="File to log URLs of failed tiles to",
+)
+@click.option(
+    "--continue",
+    "continue_download",
+    is_flag=True,
+    help="If mbtiles file exists, continue downloading from where it left off.",
+)
 @click.version_option()
 def cli(
     mbtiles,
@@ -146,6 +157,8 @@ def cli(
     referer,
     skip_on_failure,
     thread_count,
+    log_failed_urls_to,
+    continue_download,
 ):
     """
     Download map tiles and store them in an MBTiles database.
@@ -185,6 +198,12 @@ def cli(
         kwargs["tiles_dir"] = cache_dir
     else:
         kwargs["cache"] = False
+    if log_failed_urls_to:
+        kwargs["failed_urls_file"] = log_failed_urls_to
+
+    if continue_download:
+        kwargs["resume"] = True
+
     mb = landez.MBTilesBuilder(**kwargs)
     mb.add_coverage(
         bbox=bbox, zoomlevels=list(range(zoom_levels[0], zoom_levels[1] + 1))
