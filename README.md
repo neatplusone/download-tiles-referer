@@ -13,8 +13,10 @@ Unlike the root repository, you cannot install this fork from `pip`. Download th
 
 ```bash
 # Install directly with pipx (recommended) or pip
+# or Distrobox+distroshelf - as fedora heas least painful pip install at the moment. 
 pipx install .
 pipx inject download-tiles setuptools
+pipx ensurepath
 
 # Or, for development with editable install
 pip install -e .
