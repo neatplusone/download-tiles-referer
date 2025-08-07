@@ -144,6 +144,17 @@ def deg2num(lat_deg, lon_deg, zoom):
     is_flag=True,
     help="Overwrite existing mbtiles file if it already exists.",
 )
+@click.option(
+    "--log-failed-urls-to",
+    type=click.Path(dir_okay=False, file_okay=True),
+    help="File to log URLs of failed tiles to",
+)
+@click.option(
+    "--continue",
+    "continue_download",
+    is_flag=True,
+    help="If mbtiles file exists, continue downloading from where it left off.",
+)
 @click.version_option()
 def cli(
     mbtiles,
@@ -163,6 +174,8 @@ def cli(
     skip_on_failure,
     thread_count,
     overwrite,
+    log_failed_urls_to,
+    continue_download,
 ):
     """
     Download map tiles and store them in an MBTiles database.
@@ -173,8 +186,14 @@ def cli(
     # mbtiles is required unless show_bbox is used
     if not mbtiles and not show_bbox:
         raise click.BadParameter("mbtiles argument is required")
-    if overwrite and mbtiles and Path(mbtiles).exists():
-        Path(mbtiles).unlink()
+    if overwrite and continue_download:
+        raise click.BadParameter("Cannot use --overwrite and --continue at the same time.")
+    if continue_download and mbtiles and Path(mbtiles).exists():
+        pass
+    elif mbtiles and Path(mbtiles).exists():
+        raise click.BadParameter(
+            f"{mbtiles} already exists. Use --overwrite to overwrite it or --continue to continue downloading."
+        )
     suggested_name = None
     if country:
         bbox, suggested_name = lookup_bbox("country", country)
@@ -213,11 +232,21 @@ def cli(
         tiles = []
         for x in range(x_min, x_max + 1):
             for y in range(y_min, y_max + 1):
+                if continue_download:
+                    db = sqlite3.connect(str(mbtiles))
+                    cursor = db.cursor()
+                    cursor.execute(
+                        "SELECT 1 FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
+                        (zoom, x, y),
+                    )
+                    if cursor.fetchone():
+                        continue
+                    db.close()
                 tiles.append((zoom, x, y))
 
         with ThreadPoolExecutor(max_workers=thread_count) as executor:
             for _ in executor.map(
-                lambda p: download_tile(p, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_failure, verbose, cache_dir),
+                lambda p: download_tile(p, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_failure, verbose, cache_dir, log_failed_urls_to),
                 tiles,
             ):
                 pass
@@ -287,7 +316,7 @@ def cli(
                 else:
                     raise
 
-def download_tile(tile, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_failure, verbose, cache_dir):
+def download_tile(tile, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_failure, verbose, cache_dir, log_failed_urls_to):
     zoom, x, y = tile
     url = (tiles_url or DEFAULT_TILES_URL).format(
         s=tiles_subdomains[0], z=zoom, x=x, y=y
@@ -324,6 +353,9 @@ def download_tile(tile, tiles_url, tiles_subdomains, headers, mbtiles, skip_on_f
         if skip_on_failure:
             if verbose:
                 click.echo(f"Warning: Failed to download tile {zoom}/{x}/{y}: {e}", err=True)
+            if log_failed_urls_to and e.response and e.response.status_code == 404:
+                with open(log_failed_urls_to, "a") as f:
+                    f.write(f"{url}\n")
         else:
             raise
 
